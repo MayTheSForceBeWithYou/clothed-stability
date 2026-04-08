@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "title": "Fix login bug",
+    "type": "Bug",
+    "state": "Active",
+    "assignedTo": "john.doe@example.com",
+    "tags": ["auth", "high-priority"]
+  },
+  {
+    "id": 2,
+    "title": "Implement user profile page",
+    "type": "User Story",
+    "state": "New",
+    "description": "As a user, I want to view and edit my profile."
+  },
+  {
+    "id": 3,
+    "title": "Write unit tests for auth module",
+    "type": "Task",
+    "state": "New"
+  }
+]

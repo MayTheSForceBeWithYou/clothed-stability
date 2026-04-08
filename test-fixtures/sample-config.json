@@ -1,0 +1,9 @@
+{
+  "name": "Example Migration",
+  "sourceOrganizationUrl": "https://dev.azure.com/my-source-org",
+  "targetOrganizationUrl": "https://dev.azure.com/my-target-org",
+  "sourceProject": "SourceProject",
+  "targetProject": "TargetProject",
+  "dryRun": false,
+  "workItemTypes": ["Bug", "Task", "User Story", "Epic"]
+}

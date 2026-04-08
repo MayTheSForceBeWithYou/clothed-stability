@@ -1,0 +1,31 @@
+{
+  "name": "@clothed-stability/cli",
+  "version": "0.0.1",
+  "private": true,
+  "description": "CLI entrypoint for the Azure DevOps migration tool",
+  "type": "module",
+  "bin": {
+    "ado-migrate": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node ./dist/index.js",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "*",
+    "vitest": "*"
+  },
+  "dependencies": {
+    "@clothed-stability/core": "workspace:*",
+    "@clothed-stability/utils": "workspace:*",
+    "commander": "^13.1.0"
+  }
+}
