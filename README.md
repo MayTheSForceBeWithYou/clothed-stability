@@ -104,13 +104,27 @@ See [`test-fixtures/sample-config.json`](test-fixtures/sample-config.json) for t
 
 ```json
 {
-  "name": "My Migration",
-  "sourceOrganizationUrl": "https://dev.azure.com/source-org",
-  "targetOrganizationUrl": "https://dev.azure.com/target-org",
-  "sourceProject": "SourceProject",
-  "targetProject": "TargetProject",
-  "dryRun": false,
-  "workItemTypes": ["Bug", "Task", "User Story"]
+  "source": {
+    "organizationUrl": "https://dev.azure.com/source-org",
+    "project": "SourceProject",
+    "auth": {
+      "type": "pat",
+      "tokenEnvVar": "ADO_SOURCE_PAT"
+    }
+  },
+  "target": {
+    "organizationUrl": "https://dev.azure.com/target-org",
+    "project": "TargetProject",
+    "auth": {
+      "type": "pat",
+      "tokenEnvVar": "ADO_TARGET_PAT"
+    }
+  },
+  "execution": {
+    "dryRun": false,
+    "logLevel": "info",
+    "concurrency": 2
+  }
 }
 ```
 

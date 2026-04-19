@@ -1,9 +1,23 @@
 {
-  "name": "Example Migration",
-  "sourceOrganizationUrl": "https://dev.azure.com/my-source-org",
-  "targetOrganizationUrl": "https://dev.azure.com/my-target-org",
-  "sourceProject": "SourceProject",
-  "targetProject": "TargetProject",
-  "dryRun": false,
-  "workItemTypes": ["Bug", "Task", "User Story", "Epic"]
+  "source": {
+    "organizationUrl": "https://dev.azure.com/my-source-org",
+    "project": "SourceProject",
+    "auth": {
+      "type": "pat",
+      "tokenEnvVar": "ADO_SOURCE_PAT"
+    }
+  },
+  "target": {
+    "organizationUrl": "https://dev.azure.com/my-target-org",
+    "project": "TargetProject",
+    "auth": {
+      "type": "pat",
+      "tokenEnvVar": "ADO_TARGET_PAT"
+    }
+  },
+  "execution": {
+    "dryRun": false,
+    "logLevel": "info",
+    "concurrency": 2
+  }
 }

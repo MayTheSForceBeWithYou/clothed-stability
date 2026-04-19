@@ -3,21 +3,29 @@ import { z } from 'zod';
 /**
  * Schema for the migration configuration file.
  */
+const MigrationAuthSchema = z.object({
+  type: z.literal('pat'),
+  tokenEnvVar: z.string().min(1),
+});
+
+const MigrationEndpointSchema = z.object({
+  organizationUrl: z.string().url(),
+  project: z.string().min(1),
+  auth: MigrationAuthSchema,
+});
+
+const MigrationExecutionSchema = z
+  .object({
+    dryRun: z.boolean().default(false),
+    logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+    concurrency: z.number().int().min(1).default(1),
+  })
+  .default({});
+
 export const MigrationConfigSchema = z.object({
-  /** Display name for this migration run */
-  name: z.string().min(1),
-  /** Source Azure DevOps organization URL */
-  sourceOrganizationUrl: z.string().url(),
-  /** Target Azure DevOps organization URL */
-  targetOrganizationUrl: z.string().url(),
-  /** Source project name */
-  sourceProject: z.string().min(1),
-  /** Target project name */
-  targetProject: z.string().min(1),
-  /** Whether to perform a dry run (no writes) */
-  dryRun: z.boolean().default(false),
-  /** Optional list of work-item types to migrate */
-  workItemTypes: z.array(z.string()).optional(),
+  source: MigrationEndpointSchema,
+  target: MigrationEndpointSchema,
+  execution: MigrationExecutionSchema,
 });
 
 export type MigrationConfig = z.infer<typeof MigrationConfigSchema>;
