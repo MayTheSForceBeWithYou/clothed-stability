@@ -1,0 +1,28 @@
+{
+  "name": "@clothed-stability/ado-client",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Azure DevOps REST API client wrapper",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "*",
+    "vitest": "*"
+  },
+  "dependencies": {
+    "@clothed-stability/core": "workspace:*",
+    "@clothed-stability/utils": "workspace:*"
+  }
+}

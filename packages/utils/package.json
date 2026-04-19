@@ -1,0 +1,27 @@
+{
+  "name": "@clothed-stability/utils",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Shared utilities: logging, retry, throttling",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "*",
+    "vitest": "*"
+  },
+  "dependencies": {
+    "pino": "^9.6.0"
+  }
+}
