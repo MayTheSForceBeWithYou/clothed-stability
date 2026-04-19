@@ -22,6 +22,7 @@
     "vitest": "*"
   },
   "dependencies": {
+    "@clothed-stability/ado-client": "workspace:*",
     "@clothed-stability/core": "workspace:*",
     "@clothed-stability/utils": "workspace:*"
   }

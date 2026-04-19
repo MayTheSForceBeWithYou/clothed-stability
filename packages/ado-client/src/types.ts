@@ -1,4 +1,4 @@
-import type { WorkItem, Project } from '@clothed-stability/core';
+import type { WorkItem, WorkItemType, Project } from '@clothed-stability/core';
 import type { Logger } from '@clothed-stability/utils';
 
 /**
@@ -41,6 +41,9 @@ export interface IAdoClient {
 
   /** Gets a single work item by ID */
   getWorkItem(projectName: string, id: number): Promise<WorkItem>;
+
+  /** Lists work item types in a project */
+  listWorkItemTypes(projectName: string): Promise<WorkItemType[]>;
 
   /** Lists work items matching a WIQL query */
   queryWorkItems(projectName: string, wiql: string): Promise<WorkItem[]>;
