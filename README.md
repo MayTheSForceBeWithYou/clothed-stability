@@ -128,6 +128,8 @@ See [`test-fixtures/sample-config.json`](test-fixtures/sample-config.json) for t
 }
 ```
 
+`validate` checks both source and target Azure DevOps connections and requires the PAT environment variables referenced by `source.auth.tokenEnvVar` and `target.auth.tokenEnvVar` to be set before running.
+
 ---
 
 ## Architecture
