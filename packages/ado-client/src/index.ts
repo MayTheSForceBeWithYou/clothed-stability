@@ -1,8 +1,8 @@
-export { AzureDevOpsClient, createAzureDevOpsClient, AdoClient } from './client.js';
+export { AdoClient, createAdoClient } from './client.js';
 export type {
   IAdoClient,
   AdoCredentials,
   AdoConnectionOptions,
-  AzureDevOpsClientOptions,
-  CreateAzureDevOpsClientOptions,
+  AdoClientOptions,
+  CreateAdoClientOptions,
 } from './types.js';

@@ -4,11 +4,11 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
 
-const { info, error, validateConnection, createAzureDevOpsClient } = vi.hoisted(() => ({
+const { info, error, validateConnection, createAdoClient } = vi.hoisted(() => ({
   info: vi.fn(),
   error: vi.fn(),
   validateConnection: vi.fn(() => Promise.resolve()),
-  createAzureDevOpsClient: vi.fn(),
+  createAdoClient: vi.fn(),
 }));
 
 vi.mock('@clothed-stability/utils', () => ({
@@ -19,7 +19,7 @@ vi.mock('@clothed-stability/utils', () => ({
 }));
 
 vi.mock('@clothed-stability/ado-client', () => ({
-  createAzureDevOpsClient,
+  createAdoClient,
 }));
 
 import { registerValidateCommand } from '../commands/validate.js';
@@ -42,7 +42,7 @@ beforeEach(() => {
   info.mockReset();
   error.mockReset();
   validateConnection.mockReset();
-  createAzureDevOpsClient.mockReset();
+  createAdoClient.mockReset();
 });
 
 afterEach(() => {
@@ -74,7 +74,7 @@ describe('validate command', () => {
 
     try {
       validateConnection.mockResolvedValue(undefined);
-      createAzureDevOpsClient.mockReturnValue({ validateConnection });
+      createAdoClient.mockReturnValue({ validateConnection });
 
       const program = createProgram();
       await expect(
@@ -83,7 +83,7 @@ describe('validate command', () => {
         }),
       ).resolves.toBe(program);
 
-      expect(createAzureDevOpsClient).toHaveBeenCalledTimes(2);
+      expect(createAdoClient).toHaveBeenCalledTimes(2);
       expect(validateConnection).toHaveBeenCalledTimes(2);
       expect(info).toHaveBeenCalledWith('Source and target Azure DevOps connections are valid');
     } finally {
@@ -114,7 +114,7 @@ describe('validate command', () => {
     );
 
     try {
-      createAzureDevOpsClient
+      createAdoClient
         .mockReturnValueOnce({ validateConnection: vi.fn().mockResolvedValue(undefined) })
         .mockImplementationOnce(() => {
           throw new Error('Missing required PAT environment variable: ADO_TARGET_PAT');

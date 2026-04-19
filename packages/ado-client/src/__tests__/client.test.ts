@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AzureDevOpsClient, createAzureDevOpsClient } from '../client.js';
+import { AdoClient, createAdoClient } from '../client.js';
 
-describe('AzureDevOpsClient', () => {
+describe('AdoClient', () => {
   const organizationUrl = 'https://dev.azure.com/test-org';
 
   beforeEach(() => {
@@ -10,7 +10,7 @@ describe('AzureDevOpsClient', () => {
 
   it('fails when PAT env var is missing', () => {
     expect(() =>
-      createAzureDevOpsClient({
+      createAdoClient({
         organizationUrl,
         patEnvVar: 'ADO_TEST_PAT',
       }),
@@ -27,7 +27,7 @@ describe('AzureDevOpsClient', () => {
       }),
     );
 
-    const client = createAzureDevOpsClient({
+    const client = createAdoClient({
       organizationUrl,
       patEnvVar: 'ADO_TEST_PAT',
       fetchFn: fetchMock as unknown as typeof fetch,
@@ -76,7 +76,7 @@ describe('AzureDevOpsClient', () => {
       ),
     );
 
-    const client = new AzureDevOpsClient({
+    const client = new AdoClient({
       organizationUrl,
       pat: 'pat',
       fetchFn: fetchMock as unknown as typeof fetch,
@@ -96,7 +96,7 @@ describe('AzureDevOpsClient', () => {
     const networkFailureFetch = vi.fn<typeof fetch>();
     networkFailureFetch.mockRejectedValue(new Error('socket hang up'));
 
-    const networkClient = new AzureDevOpsClient({
+    const networkClient = new AdoClient({
       organizationUrl,
       pat: 'pat',
       fetchFn: networkFailureFetch as unknown as typeof fetch,
@@ -107,7 +107,7 @@ describe('AzureDevOpsClient', () => {
     const nonSuccessFetch = vi.fn<typeof fetch>();
     nonSuccessFetch.mockResolvedValue(new Response('Unauthorized', { status: 401 }));
 
-    const nonSuccessClient = new AzureDevOpsClient({
+    const nonSuccessClient = new AdoClient({
       organizationUrl,
       pat: 'pat',
       fetchFn: nonSuccessFetch as unknown as typeof fetch,

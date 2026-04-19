@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { loadConfigFromFile } from '@clothed-stability/core';
-import { createAzureDevOpsClient } from '@clothed-stability/ado-client';
+import { createAdoClient } from '@clothed-stability/ado-client';
 import { createLogger } from '@clothed-stability/utils';
 
 const logger = createLogger({ name: 'cli:validate' });
@@ -34,7 +34,7 @@ async function validateEndpointConnection(
   organizationUrl: string,
   patEnvVar: string,
 ): Promise<void> {
-  const client = createAzureDevOpsClient({
+  const client = createAdoClient({
     organizationUrl,
     patEnvVar,
   });

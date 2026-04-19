@@ -17,14 +17,14 @@ export interface AdoConnectionOptions {
   credentials: AdoCredentials;
 }
 
-export interface AzureDevOpsClientOptions {
+export interface AdoClientOptions {
   organizationUrl: string;
   pat: string;
   fetchFn?: typeof fetch;
   logger?: Logger;
 }
 
-export interface CreateAzureDevOpsClientOptions {
+export interface CreateAdoClientOptions {
   organizationUrl: string;
   patEnvVar: string;
   fetchFn?: typeof fetch;

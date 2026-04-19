@@ -1,10 +1,5 @@
 import type { WorkItem, Project } from '@clothed-stability/core';
-import type {
-  IAdoClient,
-  AzureDevOpsClientOptions,
-  CreateAzureDevOpsClientOptions,
-  AdoConnectionOptions,
-} from './types.js';
+import type { IAdoClient, AdoClientOptions, CreateAdoClientOptions } from './types.js';
 import type { Logger } from '@clothed-stability/utils';
 import { createLogger } from '@clothed-stability/utils';
 
@@ -53,13 +48,13 @@ async function readResponseBody(response: Response): Promise<string | undefined>
 /**
  * Azure DevOps REST API client using PAT authentication.
  */
-export class AzureDevOpsClient implements IAdoClient {
+export class AdoClient implements IAdoClient {
   private readonly logger: Logger;
   private readonly fetchFn: typeof fetch;
   private readonly organizationUrl: string;
   private readonly authorizationHeader: string;
 
-  constructor(options: AzureDevOpsClientOptions) {
+  constructor(options: AdoClientOptions) {
     this.logger = options.logger ?? createLogger({ name: 'ado-client' });
     this.fetchFn = options.fetchFn ?? fetch;
     this.organizationUrl = ensureTrailingSlash(options.organizationUrl);
@@ -67,7 +62,7 @@ export class AzureDevOpsClient implements IAdoClient {
 
     this.logger.info(
       { organizationUrl: this.organizationUrl },
-      'AzureDevOpsClient initialized',
+      'AdoClient initialized',
     );
   }
 
@@ -125,9 +120,7 @@ export class AzureDevOpsClient implements IAdoClient {
   }
 
   queryWorkItems(_projectName: string, _wiql: string): Promise<WorkItem[]> {
-    return Promise.reject(
-      new Error('queryWorkItems is not supported by the GET-only AzureDevOpsClient'),
-    );
+    return Promise.reject(new Error('queryWorkItems is not supported by the GET-only AdoClient'));
   }
 
   private async getJson<TResponse>(path: string): Promise<TResponse> {
@@ -166,15 +159,13 @@ export class AzureDevOpsClient implements IAdoClient {
   }
 }
 
-export function createAzureDevOpsClient(
-  options: CreateAzureDevOpsClientOptions,
-): AzureDevOpsClient {
+export function createAdoClient(options: CreateAdoClientOptions): AdoClient {
   const pat = process.env[options.patEnvVar];
   if (typeof pat !== 'string' || pat.length === 0) {
     throw new Error(`Missing required PAT environment variable: ${options.patEnvVar}`);
   }
 
-  const clientOptions: AzureDevOpsClientOptions = {
+  const clientOptions: AdoClientOptions = {
     organizationUrl: options.organizationUrl,
     pat,
   };
@@ -187,17 +178,5 @@ export function createAzureDevOpsClient(
     clientOptions.logger = options.logger;
   }
 
-  return new AzureDevOpsClient(clientOptions);
-}
-
-/**
- * Backward-compatible alias.
- */
-export class AdoClient extends AzureDevOpsClient {
-  constructor(options: AdoConnectionOptions) {
-    super({
-      organizationUrl: options.organizationUrl,
-      pat: options.credentials.pat,
-    });
-  }
+  return new AdoClient(clientOptions);
 }
