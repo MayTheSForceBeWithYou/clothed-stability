@@ -72,20 +72,18 @@ export class AzureDevOpsClient implements IAdoClient {
   }
 
   async validateConnection(): Promise<void> {
-    await this.getJson<AdoListResponse<Project>>('_apis/projects?$top=1&api-version=7.1-preview.4');
+    await this.getJson<AdoListResponse<Project>>('_apis/projects?$top=1&api-version=7.1');
   }
 
   async listProjects(): Promise<Project[]> {
-    const response = await this.getJson<AdoListResponse<Project>>(
-      '_apis/projects?api-version=7.1-preview.4',
-    );
+    const response = await this.getJson<AdoListResponse<Project>>('_apis/projects?api-version=7.1');
     return response.value;
   }
 
   async getWorkItem(projectName: string, id: number): Promise<WorkItem> {
     const encodedProjectName = encodeURIComponent(projectName);
     const response = await this.getJson<AdoWorkItemResponse>(
-      `${encodedProjectName}/_apis/wit/workitems/${String(id)}?api-version=7.1-preview.3`,
+      `${encodedProjectName}/_apis/wit/workitems/${String(id)}?api-version=7.1`,
     );
 
     const workItem: WorkItem = {
