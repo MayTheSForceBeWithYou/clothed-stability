@@ -62,7 +62,7 @@ describe('parseMigrationConfig', () => {
         ...validConfig,
         execution: {
           ...validConfig.execution,
-          logLevel: 'verbose',
+          logLevel: 'invalid',
         },
       }),
     ).toThrow();

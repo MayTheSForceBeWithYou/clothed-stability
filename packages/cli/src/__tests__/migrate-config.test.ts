@@ -9,7 +9,7 @@ const { info } = vi.hoisted(() => ({
 }));
 
 vi.mock('@clothed-stability/utils', () => ({
-  createLogger: () => ({
+  createLogger: (): { info: typeof info } => ({
     info,
   }),
 }));

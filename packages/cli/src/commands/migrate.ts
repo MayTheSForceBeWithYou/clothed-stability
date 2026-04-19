@@ -13,7 +13,7 @@ export function registerMigrateCommand(program: Command): void {
     .action((options: { config: string; dryRun: boolean }) => {
       const loadedConfig = loadConfigFromFile(options.config);
       const config =
-        options.dryRun === true
+        options.dryRun
           ? {
               ...loadedConfig,
               execution: {
