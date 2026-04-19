@@ -1,4 +1,5 @@
 import type { WorkItem, Project } from '@clothed-stability/core';
+import type { Logger } from '@clothed-stability/utils';
 
 /**
  * Credentials used to authenticate with Azure DevOps.
@@ -14,6 +15,20 @@ export interface AdoCredentials {
 export interface AdoConnectionOptions {
   organizationUrl: string;
   credentials: AdoCredentials;
+}
+
+export interface AzureDevOpsClientOptions {
+  organizationUrl: string;
+  pat: string;
+  fetchFn?: typeof fetch;
+  logger?: Logger;
+}
+
+export interface CreateAzureDevOpsClientOptions {
+  organizationUrl: string;
+  patEnvVar: string;
+  fetchFn?: typeof fetch;
+  logger?: Logger;
 }
 
 /**
