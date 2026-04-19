@@ -92,6 +92,56 @@ describe('AdoClient', () => {
     ]);
   });
 
+  it('lists work item types for a project', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          value: [
+            {
+              name: 'Bug',
+              referenceName: 'Microsoft.VSTS.WorkItemTypes.Bug',
+              description: 'Represents a defect',
+            },
+            {
+              name: 'Task',
+              referenceName: 'Microsoft.VSTS.WorkItemTypes.Task',
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+    );
+
+    const client = new AdoClient({
+      organizationUrl,
+      pat: 'pat',
+      fetchFn: fetchMock as unknown as typeof fetch,
+    });
+
+    await expect(client.listWorkItemTypes('Project 1')).resolves.toEqual([
+      {
+        name: 'Bug',
+        referenceName: 'Microsoft.VSTS.WorkItemTypes.Bug',
+        description: 'Represents a defect',
+      },
+      {
+        name: 'Task',
+        referenceName: 'Microsoft.VSTS.WorkItemTypes.Task',
+      },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://dev.azure.com/test-org/Project%201/_apis/wit/workitemtypes?api-version=7.1',
+      expect.objectContaining({
+        method: 'GET',
+      }),
+    );
+  });
+
   it('handles network errors and non-2xx responses', async () => {
     const networkFailureFetch = vi.fn<typeof fetch>();
     networkFailureFetch.mockRejectedValue(new Error('socket hang up'));

@@ -1,4 +1,4 @@
-import type { WorkItem, Project } from '@clothed-stability/core';
+import type { WorkItem, WorkItemType, Project } from '@clothed-stability/core';
 import type { IAdoClient, AdoClientOptions, CreateAdoClientOptions } from './types.js';
 import type { Logger } from '@clothed-stability/utils';
 import { createLogger } from '@clothed-stability/utils';
@@ -10,6 +10,12 @@ interface AdoListResponse<T> {
 interface AdoWorkItemResponse {
   id: number;
   fields: Record<string, unknown>;
+}
+
+interface AdoWorkItemTypeResponse {
+  name: string;
+  referenceName: string;
+  description?: string;
 }
 
 function ensureTrailingSlash(value: string): string {
@@ -117,6 +123,26 @@ export class AdoClient implements IAdoClient {
     }
 
     return workItem;
+  }
+
+  async listWorkItemTypes(projectName: string): Promise<WorkItemType[]> {
+    const encodedProjectName = encodeURIComponent(projectName);
+    const response = await this.getJson<AdoListResponse<AdoWorkItemTypeResponse>>(
+      `${encodedProjectName}/_apis/wit/workitemtypes?api-version=7.1`,
+    );
+
+    return response.value.map((workItemType): WorkItemType => {
+      const result: WorkItemType = {
+        name: workItemType.name,
+        referenceName: workItemType.referenceName,
+      };
+
+      if (typeof workItemType.description === 'string' && workItemType.description.length > 0) {
+        result.description = workItemType.description;
+      }
+
+      return result;
+    });
   }
 
   queryWorkItems(_projectName: string, _wiql: string): Promise<WorkItem[]> {
