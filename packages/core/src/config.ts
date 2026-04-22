@@ -1,32 +1,35 @@
 import { z } from 'zod';
 
-const AuthSchema = z.object({
+/**
+ * Schema for the migration configuration file.
+ */
+const MigrationAuthSchema = z.object({
   type: z.literal('pat'),
   tokenEnvVar: z.string().min(1),
 });
 
-const OrgSchema = z.object({
+const MigrationEndpointSchema = z.object({
   organizationUrl: z.string().url(),
   project: z.string().min(1),
-  auth: AuthSchema,
+  auth: MigrationAuthSchema,
 });
+
+const MigrationExecutionSchema = z
+  .object({
+    dryRun: z.boolean().default(false),
+    logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+    concurrency: z.number().int().min(1).max(10).default(1),
+  })
+  .default({});
 
 export const MigrationConfigSchema = z.object({
-  source: OrgSchema,
-  target: OrgSchema,
-  execution: z
-    .object({
-      dryRun: z.boolean().default(false),
-      logLevel: z
-        .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal'])
-        .default('info'),
-      concurrency: z.number().int().min(1).max(10).default(2),
-    })
-    .default({}),
+  source: MigrationEndpointSchema,
+  target: MigrationEndpointSchema,
+  execution: MigrationExecutionSchema,
 });
 
-export type AuthConfig = z.infer<typeof AuthSchema>;
-export type OrgConfig = z.infer<typeof OrgSchema>;
+export type AuthConfig = z.infer<typeof MigrationAuthSchema>;
+export type OrgConfig = z.infer<typeof MigrationEndpointSchema>;
 export type MigrationConfig = z.infer<typeof MigrationConfigSchema>;
 
 export function parseMigrationConfig(raw: unknown): MigrationConfig {

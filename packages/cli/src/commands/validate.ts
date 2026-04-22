@@ -1,7 +1,9 @@
 import type { Command } from 'commander';
-import { loadConfigFromFile, resolveAuth } from '@clothed-stability/core';
-import { AdoClient } from '@clothed-stability/ado-client';
+import { loadConfigFromFile } from '@clothed-stability/core';
+import { createAdoClient } from '@clothed-stability/ado-client';
 import { createLogger } from '@clothed-stability/utils';
+
+const logger = createLogger({ name: 'cli:validate' });
 
 export function registerValidateCommand(program: Command): void {
   program
@@ -9,71 +11,46 @@ export function registerValidateCommand(program: Command): void {
     .description('Validate a migration config file without running a migration')
     .requiredOption('-c, --config <path>', 'Path to the migration config JSON file')
     .action(async (options: { config: string }) => {
-      const logger = createLogger({ name: 'cli:validate' });
+      const config = loadConfigFromFile(options.config);
+      logger.info({ configPath: options.config }, 'Loaded and validated migration config');
 
-      // Validate config schema
-      let config;
-      try {
-        config = loadConfigFromFile(options.config);
-        logger.info('Config schema is valid');
-      } catch (err) {
-        logger.error({ err }, 'Config validation failed');
-        process.exit(1);
-      }
+      await validateEndpointConnection(
+        'source',
+        config.source.organizationUrl,
+        config.source.auth.tokenEnvVar,
+      );
+      await validateEndpointConnection(
+        'target',
+        config.target.organizationUrl,
+        config.target.auth.tokenEnvVar,
+      );
 
-      // Resolve auth tokens
-      let sourcePat: string;
-      let targetPat: string;
-      try {
-        sourcePat = resolveAuth(config.source.auth);
-        targetPat = resolveAuth(config.target.auth);
-      } catch (err) {
-        logger.error({ err }, 'Auth resolution failed');
-        process.exit(1);
-      }
-
-      // Test source connection
-      const sourceClient = new AdoClient({
-        organizationUrl: config.source.organizationUrl,
-        credentials: { pat: sourcePat },
-      });
-      try {
-        const projects = await sourceClient.listProjects();
-        const found = projects.some((p) => p.name === config.source.project);
-        if (!found) {
-          logger.warn(
-            { project: config.source.project },
-            'Source project not found in organization',
-          );
-        } else {
-          logger.info({ project: config.source.project }, 'Source project found');
-        }
-      } catch (err) {
-        logger.error({ err, url: config.source.organizationUrl }, 'Source connection failed');
-        process.exit(1);
-      }
-
-      // Test target connection
-      const targetClient = new AdoClient({
-        organizationUrl: config.target.organizationUrl,
-        credentials: { pat: targetPat },
-      });
-      try {
-        const projects = await targetClient.listProjects();
-        const found = projects.some((p) => p.name === config.target.project);
-        if (!found) {
-          logger.warn(
-            { project: config.target.project },
-            'Target project not found in organization',
-          );
-        } else {
-          logger.info({ project: config.target.project }, 'Target project found');
-        }
-      } catch (err) {
-        logger.error({ err, url: config.target.organizationUrl }, 'Target connection failed');
-        process.exit(1);
-      }
-
-      logger.info('Validation complete');
+      logger.info('Source and target Azure DevOps connections are valid');
     });
+}
+
+async function validateEndpointConnection(
+  endpoint: 'source' | 'target',
+  organizationUrl: string,
+  patEnvVar: string,
+): Promise<void> {
+  const client = createAdoClient({
+    organizationUrl,
+    patEnvVar,
+  });
+
+  try {
+    await client.validateConnection();
+    logger.info({ endpoint, organizationUrl }, 'Azure DevOps connection validated');
+  } catch (error: unknown) {
+    logger.error(
+      {
+        endpoint,
+        organizationUrl,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Azure DevOps connection validation failed',
+    );
+    throw error;
+  }
 }

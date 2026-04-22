@@ -1,5 +1,5 @@
-import type { WorkItem, Project } from '@clothed-stability/core';
-import type { IAdoClient, AdoConnectionOptions } from './types.js';
+import type { WorkItem, WorkItemType, Project } from '@clothed-stability/core';
+import type { IAdoClient, AdoClientOptions, CreateAdoClientOptions } from './types.js';
 import type { Logger } from '@clothed-stability/utils';
 import { createLogger } from '@clothed-stability/utils';
 
@@ -36,144 +36,33 @@ interface AdoBatchResponse {
   value: AdoWorkItemDetail[];
 }
 
-interface AdoProjectDetail {
-  id: string;
+interface AdoListResponse<T> {
+  value: T[];
+}
+
+interface AdoWorkItemTypeResponse {
   name: string;
+  referenceName: string;
   description?: string;
-  url: string;
 }
 
-interface AdoProjectsResponse {
-  value: AdoProjectDetail[];
+function ensureTrailingSlash(value: string): string {
+  return value.endsWith('/') ? value : `${value}/`;
 }
 
-export class AdoClient implements IAdoClient {
-  private readonly logger: Logger;
-  private readonly baseUrl: string;
-  private readonly authHeader: string;
-
-  constructor(private readonly options: AdoConnectionOptions) {
-    this.logger = createLogger({ name: 'ado-client' });
-    this.baseUrl = options.organizationUrl.replace(/\/$/, '');
-    const encoded = Buffer.from(`:${options.credentials.pat}`).toString('base64');
-    this.authHeader = `Basic ${encoded}`;
-    this.logger.info({ organizationUrl: options.organizationUrl }, 'AdoClient initialized');
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
   }
+  return String(error);
+}
 
-  private async request<T>(
-    method: string,
-    url: string,
-    body?: unknown,
-    contentType = 'application/json',
-  ): Promise<T> {
-    const headers: Record<string, string> = {
-      Authorization: this.authHeader,
-      Accept: 'application/json',
-      'Content-Type': contentType,
-    };
-
-    const init: RequestInit = { method, headers };
-    if (body !== undefined) {
-      init.body = JSON.stringify(body);
-    }
-
-    this.logger.debug({ method, url }, 'ADO API request');
-    const response = await fetch(url, init);
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`ADO API error ${response.status} ${response.statusText}: ${text}`);
-    }
-
-    return response.json() as Promise<T>;
-  }
-
-  async listProjects(): Promise<Project[]> {
-    const url = `${this.baseUrl}/_apis/projects?api-version=${API_VERSION}`;
-    const data = await this.request<AdoProjectsResponse>('GET', url);
-    return data.value.map((p) => {
-      const project: Project = { id: p.id, name: p.name, url: p.url };
-      if (p.description !== undefined) project.description = p.description;
-      return project;
-    });
-  }
-
-  async getWorkItem(projectName: string, id: number): Promise<WorkItem> {
-    const url = `${this.baseUrl}/${encodeURIComponent(projectName)}/_apis/wit/workitems/${id}?$expand=all&api-version=${API_VERSION}`;
-    const item = await this.request<AdoWorkItemDetail>('GET', url);
-    return mapFields(item);
-  }
-
-  async getWorkItemsByIds(projectName: string, ids: number[]): Promise<WorkItem[]> {
-    if (ids.length === 0) return [];
-    this.logger.info({ count: ids.length }, 'Fetching work items by IDs');
-    return this._fetchBatch(projectName, ids);
-  }
-
-  async queryWorkItems(projectName: string, wiql: string): Promise<WorkItem[]> {
-    const url = `${this.baseUrl}/${encodeURIComponent(projectName)}/_apis/wit/wiql?api-version=${API_VERSION}`;
-    const wiqlResponse = await this.request<AdoWiqlResponse>('POST', url, { query: wiql });
-
-    const ids = wiqlResponse.workItems.map((w) => w.id);
-    if (ids.length === 0) return [];
-
-    this.logger.info({ count: ids.length }, 'Fetching work item details');
-    return this._fetchBatch(projectName, ids);
-  }
-
-  private async _fetchBatch(projectName: string, ids: number[]): Promise<WorkItem[]> {
-    const workItems: WorkItem[] = [];
-    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-      const batch = ids.slice(i, i + BATCH_SIZE);
-      const batchUrl = `${this.baseUrl}/${encodeURIComponent(projectName)}/_apis/wit/workitems?ids=${batch.join(',')}&$expand=all&api-version=${API_VERSION}`;
-      const batchData = await this.request<AdoBatchResponse>('GET', batchUrl);
-      workItems.push(...batchData.value.map(mapFields));
-    }
-    return workItems;
-  }
-
-  async createWorkItem(
-    projectName: string,
-    type: string,
-    fields: Record<string, unknown>,
-  ): Promise<WorkItem> {
-    const url = `${this.baseUrl}/${encodeURIComponent(projectName)}/_apis/wit/workitems/$${encodeURIComponent(type)}?api-version=${API_VERSION}`;
-
-    const patch = Object.entries(fields).map(([key, value]) => ({
-      op: 'add',
-      path: `/fields/${key}`,
-      value,
-    }));
-
-    const item = await this.request<AdoWorkItemDetail>(
-      'POST',
-      url,
-      patch,
-      'application/json-patch+json',
-    );
-    return mapFields(item);
-  }
-
-  async updateWorkItem(
-    projectName: string,
-    id: number,
-    fields: Record<string, string | number | boolean | null>,
-  ): Promise<WorkItem> {
-    const url = `${this.baseUrl}/${encodeURIComponent(projectName)}/_apis/wit/workitems/${id}?api-version=${API_VERSION}`;
-
-    const patch = Object.entries(fields).map(([key, value]) => ({
-      op: 'add',
-      path: `/fields/${key}`,
-      value,
-    }));
-
-    const item = await this.request<AdoWorkItemDetail>(
-      'PATCH',
-      url,
-      patch,
-      'application/json-patch+json',
-    );
-    return mapFields(item);
+async function readResponseBody(response: Response): Promise<string | undefined> {
+  try {
+    const body = await response.text();
+    return body.length > 0 ? body : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -207,4 +96,206 @@ function mapFields(item: AdoWorkItemDetail): WorkItem {
   if (tags !== undefined) result.tags = tags;
 
   return result;
+}
+
+/**
+ * Azure DevOps REST API client using PAT authentication.
+ */
+export class AdoClient implements IAdoClient {
+  private readonly logger: Logger;
+  private readonly fetchFn: typeof fetch;
+  private readonly organizationUrl: string;
+  private readonly authorizationHeader: string;
+
+  constructor(options: AdoClientOptions) {
+    this.logger = options.logger ?? createLogger({ name: 'ado-client' });
+    this.fetchFn = options.fetchFn ?? fetch;
+    this.organizationUrl = ensureTrailingSlash(options.organizationUrl);
+    this.authorizationHeader = `Basic ${Buffer.from(`:${options.pat}`).toString('base64')}`;
+
+    this.logger.info(
+      { organizationUrl: this.organizationUrl },
+      'AdoClient initialized',
+    );
+  }
+
+  async validateConnection(): Promise<void> {
+    await this.request<AdoListResponse<Project>>('GET', `_apis/projects?$top=1&api-version=${API_VERSION}`);
+  }
+
+  async listProjects(): Promise<Project[]> {
+    const response = await this.request<AdoListResponse<Project>>('GET', `_apis/projects?api-version=${API_VERSION}`);
+    return response.value;
+  }
+
+  async getWorkItem(projectName: string, id: number): Promise<WorkItem> {
+    const enc = encodeURIComponent(projectName);
+    const item = await this.request<AdoWorkItemDetail>(
+      'GET',
+      `${enc}/_apis/wit/workitems/${String(id)}?$expand=all&api-version=${API_VERSION}`,
+    );
+    return mapFields(item);
+  }
+
+  async getWorkItemsByIds(projectName: string, ids: number[]): Promise<WorkItem[]> {
+    if (ids.length === 0) return [];
+    this.logger.info({ count: ids.length }, 'Fetching work items by IDs');
+    const enc = encodeURIComponent(projectName);
+    const workItems: WorkItem[] = [];
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batch = ids.slice(i, i + BATCH_SIZE);
+      const data = await this.request<AdoBatchResponse>(
+        'GET',
+        `${enc}/_apis/wit/workitems?ids=${batch.join(',')}&$expand=all&api-version=${API_VERSION}`,
+      );
+      workItems.push(...data.value.map(mapFields));
+    }
+    return workItems;
+  }
+
+  async listWorkItemTypes(projectName: string): Promise<WorkItemType[]> {
+    const enc = encodeURIComponent(projectName);
+    const response = await this.request<AdoListResponse<AdoWorkItemTypeResponse>>(
+      'GET',
+      `${enc}/_apis/wit/workitemtypes?api-version=${API_VERSION}`,
+    );
+
+    return response.value.map((wit): WorkItemType => {
+      const result: WorkItemType = {
+        name: wit.name,
+        referenceName: wit.referenceName,
+      };
+      if (typeof wit.description === 'string' && wit.description.length > 0) {
+        result.description = wit.description;
+      }
+      return result;
+    });
+  }
+
+  async queryWorkItems(projectName: string, wiql: string): Promise<WorkItem[]> {
+    const enc = encodeURIComponent(projectName);
+    const wiqlResponse = await this.request<AdoWiqlResponse>(
+      'POST',
+      `${enc}/_apis/wit/wiql?api-version=${API_VERSION}`,
+      { query: wiql },
+    );
+
+    const ids = wiqlResponse.workItems.map((w) => w.id);
+    if (ids.length === 0) return [];
+
+    this.logger.info({ count: ids.length }, 'Fetching work item details');
+    return this.getWorkItemsByIds(projectName, ids);
+  }
+
+  async createWorkItem(
+    projectName: string,
+    type: string,
+    fields: Record<string, unknown>,
+  ): Promise<WorkItem> {
+    const enc = encodeURIComponent(projectName);
+    const patch = Object.entries(fields).map(([key, value]) => ({
+      op: 'add',
+      path: `/fields/${key}`,
+      value,
+    }));
+
+    const item = await this.request<AdoWorkItemDetail>(
+      'POST',
+      `${enc}/_apis/wit/workitems/$${encodeURIComponent(type)}?api-version=${API_VERSION}`,
+      patch,
+      'application/json-patch+json',
+    );
+    return mapFields(item);
+  }
+
+  async updateWorkItem(
+    projectName: string,
+    id: number,
+    fields: Record<string, string | number | boolean | null>,
+  ): Promise<WorkItem> {
+    const enc = encodeURIComponent(projectName);
+    const patch = Object.entries(fields).map(([key, value]) => ({
+      op: 'add',
+      path: `/fields/${key}`,
+      value,
+    }));
+
+    const item = await this.request<AdoWorkItemDetail>(
+      'PATCH',
+      `${enc}/_apis/wit/workitems/${String(id)}?api-version=${API_VERSION}`,
+      patch,
+      'application/json-patch+json',
+    );
+    return mapFields(item);
+  }
+
+  private async request<TResponse>(
+    method: string,
+    path: string,
+    body?: unknown,
+    contentType = 'application/json',
+  ): Promise<TResponse> {
+    const url = new URL(path, this.organizationUrl).toString();
+
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      Authorization: this.authorizationHeader,
+    };
+    if (body !== undefined) {
+      headers['Content-Type'] = contentType;
+    }
+
+    const init: RequestInit = { method, headers };
+    if (body !== undefined) {
+      init.body = JSON.stringify(body);
+    }
+
+    this.logger.debug({ method, url }, 'ADO API request');
+
+    let response: Response;
+    try {
+      response = await this.fetchFn(url, init);
+    } catch (error: unknown) {
+      this.logger.error({ method, url }, 'Azure DevOps request failed');
+      throw new Error(`Network error during ${method} ${url}: ${formatErrorMessage(error)}`);
+    }
+
+    this.logger.info({ method, url, status: response.status }, 'Azure DevOps request completed');
+
+    if (!response.ok) {
+      const responseBody = await readResponseBody(response);
+      const responseSuffix = responseBody === undefined ? '' : `: ${responseBody}`;
+      throw new Error(
+        `Azure DevOps request failed with status ${String(response.status)} during ${method} ${url}${responseSuffix}`,
+      );
+    }
+
+    try {
+      return (await response.json()) as TResponse;
+    } catch {
+      throw new Error(`Invalid JSON in Azure DevOps response for ${method} ${url}`);
+    }
+  }
+}
+
+export function createAdoClient(options: CreateAdoClientOptions): AdoClient {
+  const pat = process.env[options.patEnvVar];
+  if (typeof pat !== 'string' || pat.length === 0) {
+    throw new Error(`Missing required PAT environment variable: ${options.patEnvVar}`);
+  }
+
+  const clientOptions: AdoClientOptions = {
+    organizationUrl: options.organizationUrl,
+    pat,
+  };
+
+  if (options.fetchFn !== undefined) {
+    clientOptions.fetchFn = options.fetchFn;
+  }
+
+  if (options.logger !== undefined) {
+    clientOptions.logger = options.logger;
+  }
+
+  return new AdoClient(clientOptions);
 }

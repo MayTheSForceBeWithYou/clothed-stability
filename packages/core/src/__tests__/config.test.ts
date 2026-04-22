@@ -1,18 +1,27 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { parseMigrationConfig, resolveAuth } from '../config.js';
 
-const validAuth = { type: 'pat' as const, tokenEnvVar: 'ADO_PAT' };
-
 const validConfig = {
   source: {
-    organizationUrl: 'https://dev.azure.com/source-org',
+    organizationUrl: 'https://dev.azure.com/source',
     project: 'SourceProject',
-    auth: validAuth,
+    auth: {
+      type: 'pat' as const,
+      tokenEnvVar: 'ADO_SOURCE_PAT',
+    },
   },
   target: {
-    organizationUrl: 'https://dev.azure.com/target-org',
+    organizationUrl: 'https://dev.azure.com/target',
     project: 'TargetProject',
-    auth: validAuth,
+    auth: {
+      type: 'pat' as const,
+      tokenEnvVar: 'ADO_TARGET_PAT',
+    },
+  },
+  execution: {
+    dryRun: true,
+    logLevel: 'debug' as const,
+    concurrency: 2,
   },
 };
 
@@ -21,13 +30,19 @@ describe('parseMigrationConfig', () => {
     const result = parseMigrationConfig(validConfig);
     expect(result.source.project).toBe('SourceProject');
     expect(result.target.project).toBe('TargetProject');
+    expect(result.execution.logLevel).toBe('debug');
   });
 
   it('applies execution defaults', () => {
-    const result = parseMigrationConfig(validConfig);
-    expect(result.execution.dryRun).toBe(false);
-    expect(result.execution.logLevel).toBe('info');
-    expect(result.execution.concurrency).toBe(2);
+    const result = parseMigrationConfig({
+      source: validConfig.source,
+      target: validConfig.target,
+    });
+    expect(result.execution).toEqual({
+      dryRun: false,
+      logLevel: 'info',
+      concurrency: 1,
+    });
   });
 
   it('accepts explicit execution options', () => {
@@ -45,6 +60,18 @@ describe('parseMigrationConfig', () => {
       parseMigrationConfig({
         ...validConfig,
         source: { ...validConfig.source, organizationUrl: 'not-a-url' },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an invalid log level', () => {
+    expect(() =>
+      parseMigrationConfig({
+        ...validConfig,
+        execution: {
+          ...validConfig.execution,
+          logLevel: 'invalid',
+        },
       }),
     ).toThrow();
   });

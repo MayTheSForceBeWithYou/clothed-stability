@@ -45,7 +45,7 @@ export function registerBulkUpdateCommand(program: Command): void {
         const pat = resolveAuth(config.source.auth);
         const client = new AdoClient({
           organizationUrl: config.source.organizationUrl,
-          credentials: { pat },
+          pat,
         });
 
         const overrides: { limit?: number; ids?: number[]; wiql?: string } = {};

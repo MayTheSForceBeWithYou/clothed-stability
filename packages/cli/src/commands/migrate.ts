@@ -16,18 +16,19 @@ export function registerMigrateCommand(program: Command): void {
 
       const logger = createLogger({ name: 'cli:migrate', level: config.execution.logLevel });
 
-      logger.info({ config: options.config, dryRun }, 'Starting migration');
+      logger.info({ config }, 'Loaded and validated migration config');
+      logger.info({ dryRun }, 'Starting migration');
 
       const sourcePat = resolveAuth(config.source.auth);
       const targetPat = resolveAuth(config.target.auth);
 
       const sourceClient = new AdoClient({
         organizationUrl: config.source.organizationUrl,
-        credentials: { pat: sourcePat },
+        pat: sourcePat,
       });
       const targetClient = new AdoClient({
         organizationUrl: config.target.organizationUrl,
-        credentials: { pat: targetPat },
+        pat: targetPat,
       });
 
       const migrator = new WorkItemMigrator(

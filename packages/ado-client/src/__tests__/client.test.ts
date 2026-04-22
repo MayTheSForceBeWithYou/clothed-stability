@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AdoClient } from '../client.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AdoClient, createAdoClient } from '../client.js';
 
 const options = {
   organizationUrl: 'https://dev.azure.com/test-org',
-  credentials: { pat: 'test-pat' },
+  pat: 'test-pat',
 };
 
 function makeFetch(body: unknown, status = 200) {
@@ -32,47 +32,176 @@ const sampleWorkItemDetail = {
 };
 
 describe('AdoClient', () => {
-  let originalFetch: typeof fetch;
+  const organizationUrl = 'https://dev.azure.com/test-org';
 
   beforeEach(() => {
-    originalFetch = global.fetch;
+    delete process.env['ADO_TEST_PAT'];
   });
 
-  afterEach(() => {
-    global.fetch = originalFetch;
-    vi.restoreAllMocks();
+  it('fails when PAT env var is missing', () => {
+    expect(() =>
+      createAdoClient({
+        organizationUrl,
+        patEnvVar: 'ADO_TEST_PAT',
+      }),
+    ).toThrow('Missing required PAT environment variable: ADO_TEST_PAT');
   });
 
-  it('can be instantiated', () => {
-    const client = new AdoClient(options);
-    expect(client).toBeInstanceOf(AdoClient);
+  it('generates Basic auth header from PAT', async () => {
+    process.env['ADO_TEST_PAT'] = 'super-secret-pat';
+    const fetchMock = vi.fn<typeof fetch>();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ value: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const client = createAdoClient({
+      organizationUrl,
+      patEnvVar: 'ADO_TEST_PAT',
+      fetchFn: fetchMock as unknown as typeof fetch,
+    });
+
+    await client.listProjects();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstCall = fetchMock.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const requestInit = firstCall?.[1];
+    const headers = requestInit?.headers;
+
+    if (headers instanceof Headers) {
+      expect(headers.get('Authorization')).toBe(
+        `Basic ${Buffer.from(':super-secret-pat').toString('base64')}`,
+      );
+      return;
+    }
+
+    expect(headers).toEqual(
+      expect.objectContaining({
+        Authorization: `Basic ${Buffer.from(':super-secret-pat').toString('base64')}`,
+      }),
+    );
   });
 
   describe('listProjects', () => {
     it('returns mapped projects', async () => {
-      vi.stubGlobal(
-        'fetch',
-        makeFetch({
+      const client = new AdoClient({
+        ...options,
+        fetchFn: makeFetch({
           value: [{ id: 'proj-1', name: 'MyProject', url: 'https://...', description: 'Desc' }],
-        }),
-      );
-      const client = new AdoClient(options);
+        }) as unknown as typeof fetch,
+      });
       const projects = await client.listProjects();
       expect(projects).toHaveLength(1);
       expect(projects[0]!.name).toBe('MyProject');
     });
 
+    it('returns parsed JSON from GET request', async () => {
+      const fetchMock = vi.fn<typeof fetch>();
+      fetchMock.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: 'project-id',
+                name: 'Project 1',
+                description: 'Desc',
+                url: 'https://dev.azure.com/test-org/_apis/projects/project-id',
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        ),
+      );
+
+      const client = new AdoClient({
+        organizationUrl,
+        pat: 'pat',
+        fetchFn: fetchMock as unknown as typeof fetch,
+      });
+
+      await expect(client.listProjects()).resolves.toEqual([
+        {
+          id: 'project-id',
+          name: 'Project 1',
+          description: 'Desc',
+          url: 'https://dev.azure.com/test-org/_apis/projects/project-id',
+        },
+      ]);
+    });
+
     it('throws on API error', async () => {
-      vi.stubGlobal('fetch', makeFetch({ message: 'Unauthorized' }, 401));
-      const client = new AdoClient(options);
+      const client = new AdoClient({
+        ...options,
+        fetchFn: makeFetch({ message: 'Unauthorized' }, 401) as unknown as typeof fetch,
+      });
       await expect(client.listProjects()).rejects.toThrow('401');
+    });
+  });
+
+  describe('listWorkItemTypes', () => {
+    it('lists work item types for a project', async () => {
+      const fetchMock = vi.fn<typeof fetch>();
+      fetchMock.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                name: 'Bug',
+                referenceName: 'Microsoft.VSTS.WorkItemTypes.Bug',
+                description: 'Represents a defect',
+              },
+              {
+                name: 'Task',
+                referenceName: 'Microsoft.VSTS.WorkItemTypes.Task',
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        ),
+      );
+
+      const client = new AdoClient({
+        organizationUrl,
+        pat: 'pat',
+        fetchFn: fetchMock as unknown as typeof fetch,
+      });
+
+      await expect(client.listWorkItemTypes('Project 1')).resolves.toEqual([
+        {
+          name: 'Bug',
+          referenceName: 'Microsoft.VSTS.WorkItemTypes.Bug',
+          description: 'Represents a defect',
+        },
+        {
+          name: 'Task',
+          referenceName: 'Microsoft.VSTS.WorkItemTypes.Task',
+        },
+      ]);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://dev.azure.com/test-org/Project%201/_apis/wit/workitemtypes?api-version=7.1',
+        expect.objectContaining({
+          method: 'GET',
+        }),
+      );
     });
   });
 
   describe('queryWorkItems', () => {
     it('returns empty array when no work items', async () => {
-      vi.stubGlobal('fetch', makeFetch({ workItems: [] }));
-      const client = new AdoClient(options);
+      const client = new AdoClient({
+        ...options,
+        fetchFn: makeFetch({ workItems: [] }) as unknown as typeof fetch,
+      });
       const items = await client.queryWorkItems('MyProject', 'SELECT [System.Id] FROM WorkItems');
       expect(items).toEqual([]);
     });
@@ -82,15 +211,21 @@ describe('AdoClient', () => {
         .fn()
         .mockResolvedValueOnce({
           ok: true,
+          status: 200,
           json: () => Promise.resolve({ workItems: [{ id: 42, url: '...' }] }),
+          text: () => Promise.resolve(''),
         })
         .mockResolvedValueOnce({
           ok: true,
+          status: 200,
           json: () => Promise.resolve({ value: [sampleWorkItemDetail] }),
+          text: () => Promise.resolve(''),
         });
-      vi.stubGlobal('fetch', fetchMock);
 
-      const client = new AdoClient(options);
+      const client = new AdoClient({
+        ...options,
+        fetchFn: fetchMock as unknown as typeof fetch,
+      });
       const items = await client.queryWorkItems('MyProject', 'SELECT [System.Id] FROM WorkItems');
       expect(items).toHaveLength(1);
       const first = items[0]!;
@@ -103,8 +238,10 @@ describe('AdoClient', () => {
 
   describe('getWorkItem', () => {
     it('returns mapped work item', async () => {
-      vi.stubGlobal('fetch', makeFetch(sampleWorkItemDetail));
-      const client = new AdoClient(options);
+      const client = new AdoClient({
+        ...options,
+        fetchFn: makeFetch(sampleWorkItemDetail) as unknown as typeof fetch,
+      });
       const item = await client.getWorkItem('MyProject', 42);
       expect(item.id).toBe(42);
       expect(item.type).toBe('Bug');
@@ -116,11 +253,15 @@ describe('AdoClient', () => {
     it('returns items for a single batch', async () => {
       const fetchMock = vi.fn().mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: () => Promise.resolve({ value: [sampleWorkItemDetail] }),
+        text: () => Promise.resolve(''),
       });
-      vi.stubGlobal('fetch', fetchMock);
 
-      const client = new AdoClient(options);
+      const client = new AdoClient({
+        ...options,
+        fetchFn: fetchMock as unknown as typeof fetch,
+      });
       const items = await client.getWorkItemsByIds('MyProject', [42]);
       expect(items).toHaveLength(1);
       expect(items[0]!.id).toBe(42);
@@ -143,11 +284,13 @@ describe('AdoClient', () => {
       const batch2 = ids.slice(200).map(makeDetail);
       const fetchMock = vi
         .fn()
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: batch1 }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ value: batch2 }) });
-      vi.stubGlobal('fetch', fetchMock);
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ value: batch1 }), text: () => Promise.resolve('') })
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ value: batch2 }), text: () => Promise.resolve('') });
 
-      const client = new AdoClient(options);
+      const client = new AdoClient({
+        ...options,
+        fetchFn: fetchMock as unknown as typeof fetch,
+      });
       const items = await client.getWorkItemsByIds('MyProject', ids);
       expect(items).toHaveLength(250);
       expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -163,9 +306,11 @@ describe('AdoClient', () => {
   describe('updateWorkItem', () => {
     it('sends PATCH with correct URL and patch body', async () => {
       const fetchMock = makeFetch(sampleWorkItemDetail);
-      vi.stubGlobal('fetch', fetchMock);
 
-      const client = new AdoClient(options);
+      const client = new AdoClient({
+        ...options,
+        fetchFn: fetchMock as unknown as typeof fetch,
+      });
       const item = await client.updateWorkItem('MyProject', 42, {
         'System.Title': 'Updated title',
         'System.Tags': null,
@@ -188,9 +333,11 @@ describe('AdoClient', () => {
   describe('createWorkItem', () => {
     it('posts patch body and returns mapped work item', async () => {
       const fetchMock = makeFetch(sampleWorkItemDetail);
-      vi.stubGlobal('fetch', fetchMock);
 
-      const client = new AdoClient(options);
+      const client = new AdoClient({
+        ...options,
+        fetchFn: fetchMock as unknown as typeof fetch,
+      });
       const item = await client.createWorkItem('MyProject', 'Bug', {
         'System.Title': 'Fix the bug',
       });
@@ -206,5 +353,31 @@ describe('AdoClient', () => {
       const body = JSON.parse(init.body as string) as Array<{ op: string; path: string; value: unknown }>;
       expect(body[0]!).toMatchObject({ op: 'add', path: '/fields/System.Title', value: 'Fix the bug' });
     });
+  });
+
+  it('handles network errors and non-2xx responses', async () => {
+    const networkFailureFetch = vi.fn<typeof fetch>();
+    networkFailureFetch.mockRejectedValue(new Error('socket hang up'));
+
+    const networkClient = new AdoClient({
+      organizationUrl,
+      pat: 'pat',
+      fetchFn: networkFailureFetch as unknown as typeof fetch,
+    });
+
+    await expect(networkClient.listProjects()).rejects.toThrow('Network error during GET');
+
+    const nonSuccessFetch = vi.fn<typeof fetch>();
+    nonSuccessFetch.mockResolvedValue(new Response('Unauthorized', { status: 401 }));
+
+    const nonSuccessClient = new AdoClient({
+      organizationUrl,
+      pat: 'pat',
+      fetchFn: nonSuccessFetch as unknown as typeof fetch,
+    });
+
+    await expect(nonSuccessClient.listProjects()).rejects.toThrow(
+      'Azure DevOps request failed with status 401',
+    );
   });
 });

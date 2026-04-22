@@ -24,6 +24,15 @@ export interface Project {
 }
 
 /**
+ * Represents an Azure DevOps work item type.
+ */
+export interface WorkItemType {
+  name: string;
+  referenceName: string;
+  description?: string;
+}
+
+/**
  * Represents the result of a migration operation.
  */
 export type MigrationStatus = 'pending' | 'in-progress' | 'completed' | 'failed' | 'skipped';
