@@ -1,0 +1,17 @@
+{
+  "source": {
+    "organizationUrl": "https://dev.azure.com/YOUR_ORGNAME_HERE",
+    "project": "YOUR_SOURCE_PROJECTNAME_HERE",
+    "auth": { "type": "pat", "tokenEnvVar": "ADO_PAT" }
+  },
+  "target": {
+    "organizationUrl": "https://dev.azure.com/YOUR_ORGNAME_HERE",
+    "project": "YOUR_TARGET_PROJECTNAME_HERE",
+    "auth": { "type": "pat", "tokenEnvVar": "ADO_PAT" }
+  },
+  "execution": {
+    "dryRun": false,
+    "logLevel": "info",
+    "concurrency": 2
+  }
+}

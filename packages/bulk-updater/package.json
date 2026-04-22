@@ -1,21 +1,19 @@
 {
-  "name": "@clothed-stability/cli",
+  "name": "@clothed-stability/bulk-updater",
   "version": "0.0.1",
   "private": true,
-  "description": "CLI entrypoint for the Azure DevOps migration tool",
+  "description": "Bulk in-place work item updater for Azure DevOps",
   "type": "module",
-  "bin": {
-    "ado-migrate": "./dist/index.js"
-  },
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node ./dist/index.js",
     "test": "vitest run",
     "clean": "rm -rf dist"
   },
@@ -25,10 +23,8 @@
   },
   "dependencies": {
     "@clothed-stability/ado-client": "workspace:*",
-    "@clothed-stability/bulk-updater": "workspace:*",
     "@clothed-stability/core": "workspace:*",
-    "@clothed-stability/migrators": "workspace:*",
     "@clothed-stability/utils": "workspace:*",
-    "commander": "^13.1.0"
+    "zod": "^3.24.2"
   }
 }

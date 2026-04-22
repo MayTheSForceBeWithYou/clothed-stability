@@ -1,43 +1,94 @@
-import { describe, it, expect } from 'vitest';
-import { parseMigrationConfig } from '../config.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { parseMigrationConfig, resolveAuth } from '../config.js';
+
+const validAuth = { type: 'pat' as const, tokenEnvVar: 'ADO_PAT' };
 
 const validConfig = {
-  name: 'Test Migration',
-  sourceOrganizationUrl: 'https://dev.azure.com/source',
-  targetOrganizationUrl: 'https://dev.azure.com/target',
-  sourceProject: 'src-project',
-  targetProject: 'tgt-project',
+  source: {
+    organizationUrl: 'https://dev.azure.com/source-org',
+    project: 'SourceProject',
+    auth: validAuth,
+  },
+  target: {
+    organizationUrl: 'https://dev.azure.com/target-org',
+    project: 'TargetProject',
+    auth: validAuth,
+  },
 };
 
 describe('parseMigrationConfig', () => {
   it('parses a valid config', () => {
     const result = parseMigrationConfig(validConfig);
-    expect(result.name).toBe('Test Migration');
-    expect(result.dryRun).toBe(false);
+    expect(result.source.project).toBe('SourceProject');
+    expect(result.target.project).toBe('TargetProject');
   });
 
-  it('applies default dryRun: false', () => {
+  it('applies execution defaults', () => {
     const result = parseMigrationConfig(validConfig);
-    expect(result.dryRun).toBe(false);
+    expect(result.execution.dryRun).toBe(false);
+    expect(result.execution.logLevel).toBe('info');
+    expect(result.execution.concurrency).toBe(2);
   });
 
-  it('accepts dryRun: true', () => {
-    const result = parseMigrationConfig({ ...validConfig, dryRun: true });
-    expect(result.dryRun).toBe(true);
+  it('accepts explicit execution options', () => {
+    const result = parseMigrationConfig({
+      ...validConfig,
+      execution: { dryRun: true, logLevel: 'debug', concurrency: 5 },
+    });
+    expect(result.execution.dryRun).toBe(true);
+    expect(result.execution.logLevel).toBe('debug');
+    expect(result.execution.concurrency).toBe(5);
   });
 
-  it('accepts optional workItemTypes', () => {
-    const result = parseMigrationConfig({ ...validConfig, workItemTypes: ['Bug', 'Task'] });
-    expect(result.workItemTypes).toEqual(['Bug', 'Task']);
-  });
-
-  it('rejects an invalid URL', () => {
+  it('rejects an invalid organization URL', () => {
     expect(() =>
-      parseMigrationConfig({ ...validConfig, sourceOrganizationUrl: 'not-a-url' }),
+      parseMigrationConfig({
+        ...validConfig,
+        source: { ...validConfig.source, organizationUrl: 'not-a-url' },
+      }),
     ).toThrow();
   });
 
   it('rejects missing required fields', () => {
     expect(() => parseMigrationConfig({})).toThrow();
+  });
+
+  it('rejects invalid auth type', () => {
+    expect(() =>
+      parseMigrationConfig({
+        ...validConfig,
+        source: { ...validConfig.source, auth: { type: 'oauth', tokenEnvVar: 'X' } },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects concurrency out of range', () => {
+    expect(() =>
+      parseMigrationConfig({
+        ...validConfig,
+        execution: { concurrency: 0 },
+      }),
+    ).toThrow();
+  });
+});
+
+describe('resolveAuth', () => {
+  beforeEach(() => {
+    process.env['TEST_PAT'] = 'my-secret-token';
+  });
+
+  afterEach(() => {
+    delete process.env['TEST_PAT'];
+  });
+
+  it('returns token from env var', () => {
+    const token = resolveAuth({ type: 'pat', tokenEnvVar: 'TEST_PAT' });
+    expect(token).toBe('my-secret-token');
+  });
+
+  it('throws when env var is missing', () => {
+    expect(() => resolveAuth({ type: 'pat', tokenEnvVar: 'MISSING_VAR' })).toThrow(
+      'Missing env var: MISSING_VAR',
+    );
   });
 });

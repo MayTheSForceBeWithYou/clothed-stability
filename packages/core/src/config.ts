@@ -1,34 +1,40 @@
 import { z } from 'zod';
 
-/**
- * Schema for the migration configuration file.
- */
-export const MigrationConfigSchema = z.object({
-  /** Display name for this migration run */
-  name: z.string().min(1),
-  /** Source Azure DevOps organization URL */
-  sourceOrganizationUrl: z.string().url(),
-  /** Target Azure DevOps organization URL */
-  targetOrganizationUrl: z.string().url(),
-  /** Source project name */
-  sourceProject: z.string().min(1),
-  /** Target project name */
-  targetProject: z.string().min(1),
-  /** Whether to perform a dry run (no writes) */
-  dryRun: z.boolean().default(false),
-  /** Optional list of work-item types to migrate */
-  workItemTypes: z.array(z.string()).optional(),
+const AuthSchema = z.object({
+  type: z.literal('pat'),
+  tokenEnvVar: z.string().min(1),
 });
 
+const OrgSchema = z.object({
+  organizationUrl: z.string().url(),
+  project: z.string().min(1),
+  auth: AuthSchema,
+});
+
+export const MigrationConfigSchema = z.object({
+  source: OrgSchema,
+  target: OrgSchema,
+  execution: z
+    .object({
+      dryRun: z.boolean().default(false),
+      logLevel: z
+        .enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal'])
+        .default('info'),
+      concurrency: z.number().int().min(1).max(10).default(2),
+    })
+    .default({}),
+});
+
+export type AuthConfig = z.infer<typeof AuthSchema>;
+export type OrgConfig = z.infer<typeof OrgSchema>;
 export type MigrationConfig = z.infer<typeof MigrationConfigSchema>;
 
-/**
- * Parses and validates a raw configuration object.
- *
- * @param raw  Unknown input (e.g. parsed JSON).
- * @returns    Validated MigrationConfig.
- * @throws     ZodError if validation fails.
- */
 export function parseMigrationConfig(raw: unknown): MigrationConfig {
   return MigrationConfigSchema.parse(raw);
+}
+
+export function resolveAuth(auth: AuthConfig): string {
+  const token = process.env[auth.tokenEnvVar];
+  if (!token) throw new Error(`Missing env var: ${auth.tokenEnvVar}`);
+  return token;
 }
