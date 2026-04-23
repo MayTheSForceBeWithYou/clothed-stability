@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { registerMigrateCommand } from './commands/migrate.js';
 import { registerValidateCommand } from './commands/validate.js';
 import { registerDryRunCommand } from './commands/dry-run.js';
+import { registerBulkUpdateCommand } from './commands/bulk-update.js';
 
 const program = new Command();
 
@@ -14,5 +15,6 @@ program
 registerMigrateCommand(program);
 registerValidateCommand(program);
 registerDryRunCommand(program);
+registerBulkUpdateCommand(program);
 
 program.parse(process.argv);

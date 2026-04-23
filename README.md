@@ -132,6 +132,102 @@ See [`test-fixtures/sample-config.json`](test-fixtures/sample-config.json) for t
 
 ---
 
+## Bulk Update
+
+The `bulk-update` command updates existing work items **in place** within a single Azure DevOps project — no cross-project copying involved.
+
+### Purpose and Use Cases
+
+- Bulk-set a field across many work items (e.g., set priority, assign owner)
+- Add or remove tags across a query result
+- Clear stale fields
+- Tag a set of items with a marker after a process runs
+
+### Spec File
+
+Create a JSON spec file describing what to select and what to change:
+
+```json
+{
+  "project": "MyProject",
+  "selection": {
+    "ids": [101, 102, 103],
+    "wiql": "SELECT [System.Id] FROM WorkItems WHERE [System.State] = 'Active'"
+  },
+  "operations": {
+    "setFields": {
+      "System.Priority": 2
+    },
+    "clearFields": ["System.Description"],
+    "addTags": ["reviewed"],
+    "removeTags": ["pending-review"]
+  },
+  "options": {
+    "dryRun": true,
+    "skipClosedItems": true,
+    "continueOnError": true,
+    "batchSize": 25,
+    "markerTag": "bulk-updated-2024"
+  }
+}
+```
+
+**Selection:** Provide `ids`, `wiql`, or both. When both are provided their results are **unioned** (de-duplicated).
+
+**Operations:** At least one operation must be specified. Supported operations:
+
+| Operation     | Description |
+|---------------|-------------|
+| `setFields`   | Set field values (only applies if current value differs) |
+| `clearFields` | Set fields to `null` (only applies if currently non-null) |
+| `addTags`     | Add tags (skipped if tag already present, case-insensitive) |
+| `removeTags`  | Remove tags (skipped if tag not present, case-insensitive) |
+
+### Safety Notes
+
+- **`dryRun` defaults to `true`** — you must explicitly set `"dryRun": false` in your spec or omit `--dry-run` to run live.
+- Closed items (`Closed`, `Done`, `Removed`, `Resolved`) are skipped by default. Set `"skipClosedItems": false` to override.
+- `continueOnError: true` (default) means failures on individual items are recorded without aborting the run.
+- A report JSON is written after every run (default: `./bulk-update-report.json`).
+
+### Dry Run (safe preview)
+
+```bash
+node packages/cli/dist/index.js bulk-update \
+  -c migration-config.json \
+  -s bulk-update-spec.json \
+  --dry-run
+```
+
+### Live Execution
+
+```bash
+node packages/cli/dist/index.js bulk-update \
+  -c migration-config.json \
+  -s bulk-update-spec.json
+```
+
+### Additional CLI Options
+
+```
+-c, --config <path>    Migration config (org URL + auth)
+-s, --spec <path>      Bulk update spec JSON
+--dry-run              Force dry-run (overrides spec)
+--limit <n>            Max items to process
+--ids <ids>            Comma-separated ID override (e.g. "1,2,3")
+--query <wiql>         WIQL query override
+--report <path>        Report output path (default: ./bulk-update-report.json)
+```
+
+### Known Limitations
+
+- No relation/link updates
+- No attachment handling
+- Single-project only (no cross-project updates)
+- Tags are stored as a semicolon-delimited string; ordering may change after update
+
+---
+
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for the full system design, dependency graph, and future migration flow.

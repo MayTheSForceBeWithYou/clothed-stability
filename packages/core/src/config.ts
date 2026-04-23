@@ -18,7 +18,7 @@ const MigrationExecutionSchema = z
   .object({
     dryRun: z.boolean().default(false),
     logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
-    concurrency: z.number().int().min(1).default(1),
+    concurrency: z.number().int().min(1).max(10).default(1),
   })
   .default({});
 
@@ -28,15 +28,16 @@ export const MigrationConfigSchema = z.object({
   execution: MigrationExecutionSchema,
 });
 
+export type AuthConfig = z.infer<typeof MigrationAuthSchema>;
+export type OrgConfig = z.infer<typeof MigrationEndpointSchema>;
 export type MigrationConfig = z.infer<typeof MigrationConfigSchema>;
 
-/**
- * Parses and validates a raw configuration object.
- *
- * @param raw  Unknown input (e.g. parsed JSON).
- * @returns    Validated MigrationConfig.
- * @throws     ZodError if validation fails.
- */
 export function parseMigrationConfig(raw: unknown): MigrationConfig {
   return MigrationConfigSchema.parse(raw);
+}
+
+export function resolveAuth(auth: AuthConfig): string {
+  const token = process.env[auth.tokenEnvVar];
+  if (!token) throw new Error(`Missing env var: ${auth.tokenEnvVar}`);
+  return token;
 }

@@ -3,13 +3,41 @@ import type { IAdoClient, AdoClientOptions, CreateAdoClientOptions } from './typ
 import type { Logger } from '@clothed-stability/utils';
 import { createLogger } from '@clothed-stability/utils';
 
-interface AdoListResponse<T> {
-  value: T[];
+const API_VERSION = '7.1';
+const BATCH_SIZE = 200;
+
+interface AdoWorkItemRef {
+  id: number;
+  url: string;
 }
 
-interface AdoWorkItemResponse {
+interface AdoWiqlResponse {
+  workItems: AdoWorkItemRef[];
+}
+
+interface AdoWorkItemFields {
+  'System.Id': number;
+  'System.Title': string;
+  'System.WorkItemType': string;
+  'System.State': string;
+  'System.AssignedTo'?: { displayName: string } | string;
+  'System.AreaPath'?: string;
+  'System.IterationPath'?: string;
+  'System.Description'?: string;
+  'System.Tags'?: string;
+}
+
+interface AdoWorkItemDetail {
   id: number;
-  fields: Record<string, unknown>;
+  fields: AdoWorkItemFields;
+}
+
+interface AdoBatchResponse {
+  value: AdoWorkItemDetail[];
+}
+
+interface AdoListResponse<T> {
+  value: T[];
 }
 
 interface AdoWorkItemTypeResponse {
@@ -20,19 +48,6 @@ interface AdoWorkItemTypeResponse {
 
 function ensureTrailingSlash(value: string): string {
   return value.endsWith('/') ? value : `${value}/`;
-}
-
-function getRequiredField(fields: Record<string, unknown>, key: string): string {
-  const value = fields[key];
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`Azure DevOps work item response missing required field: ${key}`);
-  }
-  return value;
-}
-
-function getOptionalField(fields: Record<string, unknown>, key: string): string | undefined {
-  const value = fields[key];
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function formatErrorMessage(error: unknown): string {
@@ -49,6 +64,38 @@ async function readResponseBody(response: Response): Promise<string | undefined>
   } catch {
     return undefined;
   }
+}
+
+function mapFields(item: AdoWorkItemDetail): WorkItem {
+  const f = item.fields;
+  const assignedTo = f['System.AssignedTo'];
+  const assignedToStr =
+    typeof assignedTo === 'object'
+      ? assignedTo.displayName
+      : assignedTo;
+
+  const tagsRaw = f['System.Tags'];
+  const tags = tagsRaw
+    ? tagsRaw
+        .split(';')
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : undefined;
+
+  const result: WorkItem = {
+    id: item.id,
+    title: f['System.Title'],
+    type: f['System.WorkItemType'],
+    state: f['System.State'],
+  };
+
+  if (assignedToStr !== undefined) result.assignedTo = assignedToStr;
+  if (f['System.AreaPath'] !== undefined) result.areaPath = f['System.AreaPath'];
+  if (f['System.IterationPath'] !== undefined) result.iterationPath = f['System.IterationPath'];
+  if (f['System.Description'] !== undefined) result.description = f['System.Description'];
+  if (tags !== undefined) result.tags = tags;
+
+  return result;
 }
 
 /**
@@ -73,95 +120,141 @@ export class AdoClient implements IAdoClient {
   }
 
   async validateConnection(): Promise<void> {
-    await this.getJson<AdoListResponse<Project>>('_apis/projects?$top=1&api-version=7.1');
+    await this.request<AdoListResponse<Project>>('GET', `_apis/projects?$top=1&api-version=${API_VERSION}`);
   }
 
   async listProjects(): Promise<Project[]> {
-    const response = await this.getJson<AdoListResponse<Project>>('_apis/projects?api-version=7.1');
+    const response = await this.request<AdoListResponse<Project>>('GET', `_apis/projects?api-version=${API_VERSION}`);
     return response.value;
   }
 
   async getWorkItem(projectName: string, id: number): Promise<WorkItem> {
-    const encodedProjectName = encodeURIComponent(projectName);
-    const response = await this.getJson<AdoWorkItemResponse>(
-      `${encodedProjectName}/_apis/wit/workitems/${String(id)}?api-version=7.1`,
+    const enc = encodeURIComponent(projectName);
+    const item = await this.request<AdoWorkItemDetail>(
+      'GET',
+      `${enc}/_apis/wit/workitems/${String(id)}?$expand=all&api-version=${API_VERSION}`,
     );
+    return mapFields(item);
+  }
 
-    const workItem: WorkItem = {
-      id: response.id,
-      title: getRequiredField(response.fields, 'System.Title'),
-      type: getRequiredField(response.fields, 'System.WorkItemType'),
-      state: getRequiredField(response.fields, 'System.State'),
-    };
-
-    const assignedTo = getOptionalField(response.fields, 'System.AssignedTo');
-    if (assignedTo !== undefined) {
-      workItem.assignedTo = assignedTo;
+  async getWorkItemsByIds(projectName: string, ids: number[]): Promise<WorkItem[]> {
+    if (ids.length === 0) return [];
+    this.logger.info({ count: ids.length }, 'Fetching work items by IDs');
+    const enc = encodeURIComponent(projectName);
+    const workItems: WorkItem[] = [];
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batch = ids.slice(i, i + BATCH_SIZE);
+      const data = await this.request<AdoBatchResponse>(
+        'GET',
+        `${enc}/_apis/wit/workitems?ids=${batch.join(',')}&$expand=all&api-version=${API_VERSION}`,
+      );
+      workItems.push(...data.value.map(mapFields));
     }
-
-    const areaPath = getOptionalField(response.fields, 'System.AreaPath');
-    if (areaPath !== undefined) {
-      workItem.areaPath = areaPath;
-    }
-
-    const iterationPath = getOptionalField(response.fields, 'System.IterationPath');
-    if (iterationPath !== undefined) {
-      workItem.iterationPath = iterationPath;
-    }
-
-    const description = getOptionalField(response.fields, 'System.Description');
-    if (description !== undefined) {
-      workItem.description = description;
-    }
-
-    const tags = getOptionalField(response.fields, 'System.Tags')
-      ?.split(';')
-      .map((tag) => tag.trim())
-      .filter((tag) => tag.length > 0);
-    if (tags !== undefined) {
-      workItem.tags = tags;
-    }
-
-    return workItem;
+    return workItems;
   }
 
   async listWorkItemTypes(projectName: string): Promise<WorkItemType[]> {
-    const encodedProjectName = encodeURIComponent(projectName);
-    const response = await this.getJson<AdoListResponse<AdoWorkItemTypeResponse>>(
-      `${encodedProjectName}/_apis/wit/workitemtypes?api-version=7.1`,
+    const enc = encodeURIComponent(projectName);
+    const response = await this.request<AdoListResponse<AdoWorkItemTypeResponse>>(
+      'GET',
+      `${enc}/_apis/wit/workitemtypes?api-version=${API_VERSION}`,
     );
 
-    return response.value.map((workItemType): WorkItemType => {
+    return response.value.map((wit): WorkItemType => {
       const result: WorkItemType = {
-        name: workItemType.name,
-        referenceName: workItemType.referenceName,
+        name: wit.name,
+        referenceName: wit.referenceName,
       };
-
-      if (typeof workItemType.description === 'string' && workItemType.description.length > 0) {
-        result.description = workItemType.description;
+      if (typeof wit.description === 'string' && wit.description.length > 0) {
+        result.description = wit.description;
       }
-
       return result;
     });
   }
 
-  queryWorkItems(_projectName: string, _wiql: string): Promise<WorkItem[]> {
-    return Promise.reject(new Error('queryWorkItems is not supported by the GET-only AdoClient'));
+  async queryWorkItems(projectName: string, wiql: string): Promise<WorkItem[]> {
+    const enc = encodeURIComponent(projectName);
+    const wiqlResponse = await this.request<AdoWiqlResponse>(
+      'POST',
+      `${enc}/_apis/wit/wiql?api-version=${API_VERSION}`,
+      { query: wiql },
+    );
+
+    const ids = wiqlResponse.workItems.map((w) => w.id);
+    if (ids.length === 0) return [];
+
+    this.logger.info({ count: ids.length }, 'Fetching work item details');
+    return this.getWorkItemsByIds(projectName, ids);
   }
 
-  private async getJson<TResponse>(path: string): Promise<TResponse> {
+  async createWorkItem(
+    projectName: string,
+    type: string,
+    fields: Record<string, unknown>,
+  ): Promise<WorkItem> {
+    const enc = encodeURIComponent(projectName);
+    const patch = Object.entries(fields).map(([key, value]) => ({
+      op: 'add',
+      path: `/fields/${key}`,
+      value,
+    }));
+
+    const item = await this.request<AdoWorkItemDetail>(
+      'POST',
+      `${enc}/_apis/wit/workitems/$${encodeURIComponent(type)}?api-version=${API_VERSION}`,
+      patch,
+      'application/json-patch+json',
+    );
+    return mapFields(item);
+  }
+
+  async updateWorkItem(
+    projectName: string,
+    id: number,
+    fields: Record<string, string | number | boolean | null>,
+  ): Promise<WorkItem> {
+    const enc = encodeURIComponent(projectName);
+    const patch = Object.entries(fields).map(([key, value]) => ({
+      op: 'add',
+      path: `/fields/${key}`,
+      value,
+    }));
+
+    const item = await this.request<AdoWorkItemDetail>(
+      'PATCH',
+      `${enc}/_apis/wit/workitems/${String(id)}?api-version=${API_VERSION}`,
+      patch,
+      'application/json-patch+json',
+    );
+    return mapFields(item);
+  }
+
+  private async request<TResponse>(
+    method: string,
+    path: string,
+    body?: unknown,
+    contentType = 'application/json',
+  ): Promise<TResponse> {
     const url = new URL(path, this.organizationUrl).toString();
-    const method = 'GET';
+
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      Authorization: this.authorizationHeader,
+    };
+    if (body !== undefined) {
+      headers['Content-Type'] = contentType;
+    }
+
+    const init: RequestInit = { method, headers };
+    if (body !== undefined) {
+      init.body = JSON.stringify(body);
+    }
+
+    this.logger.debug({ method, url }, 'ADO API request');
 
     let response: Response;
     try {
-      response = await this.fetchFn(url, {
-        method,
-        headers: {
-          Accept: 'application/json',
-          Authorization: this.authorizationHeader,
-        },
-      });
+      response = await this.fetchFn(url, init);
     } catch (error: unknown) {
       this.logger.error({ method, url }, 'Azure DevOps request failed');
       throw new Error(`Network error during ${method} ${url}: ${formatErrorMessage(error)}`);

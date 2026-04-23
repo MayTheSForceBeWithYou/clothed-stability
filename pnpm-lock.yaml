@@ -52,7 +52,7 @@ importers:
         specifier: '*'
         version: 3.2.4(@types/node@25.5.2)
 
-  packages/cli:
+  packages/bulk-updater:
     dependencies:
       '@clothed-stability/ado-client':
         specifier: workspace:*
@@ -60,6 +60,34 @@ importers:
       '@clothed-stability/core':
         specifier: workspace:*
         version: link:../core
+      '@clothed-stability/utils':
+        specifier: workspace:*
+        version: link:../utils
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: '*'
+        version: 5.9.3
+      vitest:
+        specifier: '*'
+        version: 3.2.4(@types/node@25.5.2)
+
+  packages/cli:
+    dependencies:
+      '@clothed-stability/ado-client':
+        specifier: workspace:*
+        version: link:../ado-client
+      '@clothed-stability/bulk-updater':
+        specifier: workspace:*
+        version: link:../bulk-updater
+      '@clothed-stability/core':
+        specifier: workspace:*
+        version: link:../core
+      '@clothed-stability/migrators':
+        specifier: workspace:*
+        version: link:../migrators
       '@clothed-stability/utils':
         specifier: workspace:*
         version: link:../utils

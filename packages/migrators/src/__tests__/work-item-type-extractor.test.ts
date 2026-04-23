@@ -14,8 +14,11 @@ describe('WorkItemTypeExtractor', () => {
     const adoClient: IAdoClient = {
       listProjects: vi.fn<IAdoClient['listProjects']>(),
       getWorkItem: vi.fn<IAdoClient['getWorkItem']>(),
+      getWorkItemsByIds: vi.fn<IAdoClient['getWorkItemsByIds']>(),
       queryWorkItems: vi.fn<IAdoClient['queryWorkItems']>(),
       listWorkItemTypes,
+      createWorkItem: vi.fn<IAdoClient['createWorkItem']>(),
+      updateWorkItem: vi.fn<IAdoClient['updateWorkItem']>(),
     };
 
     const extractor = new WorkItemTypeExtractor({

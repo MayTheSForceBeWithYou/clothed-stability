@@ -2,16 +2,27 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Command } from 'commander';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { info } = vi.hoisted(() => ({
-  info: vi.fn(),
-}));
+const { info, mockRun, MockWorkItemMigrator, MockAdoClient } = vi.hoisted(() => {
+  const mockRun = vi.fn().mockResolvedValue([]);
+  const MockWorkItemMigrator = vi.fn().mockImplementation(() => ({ run: mockRun }));
+  const MockAdoClient = vi.fn().mockImplementation(() => ({}));
+  return { info: vi.fn(), mockRun, MockWorkItemMigrator, MockAdoClient };
+});
 
 vi.mock('@clothed-stability/utils', () => ({
   createLogger: (): { info: typeof info } => ({
     info,
   }),
+}));
+
+vi.mock('@clothed-stability/ado-client', () => ({
+  AdoClient: MockAdoClient,
+}));
+
+vi.mock('@clothed-stability/migrators', () => ({
+  WorkItemMigrator: MockWorkItemMigrator,
 }));
 
 import { registerMigrateCommand } from '../commands/migrate.js';
@@ -32,9 +43,21 @@ function writeConfig(content: string): { dir: string; filePath: string } {
 
 afterEach(() => {
   info.mockReset();
+  mockRun.mockReset();
+  mockRun.mockResolvedValue([]);
 });
 
 describe('migrate command config integration', () => {
+  beforeEach(() => {
+    process.env['ADO_SOURCE_PAT'] = 'fake-source-pat';
+    process.env['ADO_TARGET_PAT'] = 'fake-target-pat';
+  });
+
+  afterEach(() => {
+    delete process.env['ADO_SOURCE_PAT'];
+    delete process.env['ADO_TARGET_PAT'];
+  });
+
   it('loads and validates config from --config', async () => {
     const { dir, filePath } = writeConfig(
       JSON.stringify({
