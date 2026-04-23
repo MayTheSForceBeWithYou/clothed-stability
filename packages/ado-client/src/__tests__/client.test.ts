@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { AdoClient, createAdoClient } from '../client.js';
 
 const options = {
@@ -6,7 +6,7 @@ const options = {
   pat: 'test-pat',
 };
 
-function makeFetch(body: unknown, status = 200) {
+function makeFetch(body: unknown, status = 200): Mock {
   return vi.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,
@@ -95,7 +95,7 @@ describe('AdoClient', () => {
       });
       const projects = await client.listProjects();
       expect(projects).toHaveLength(1);
-      expect(projects[0]!.name).toBe('MyProject');
+      expect(projects[0]?.name).toBe('MyProject');
     });
 
     it('returns parsed JSON from GET request', async () => {
@@ -228,7 +228,7 @@ describe('AdoClient', () => {
       });
       const items = await client.queryWorkItems('MyProject', 'SELECT [System.Id] FROM WorkItems');
       expect(items).toHaveLength(1);
-      const first = items[0]!;
+      const first = items[0] as (typeof items)[number];
       expect(first.id).toBe(42);
       expect(first.title).toBe('Fix the bug');
       expect(first.assignedTo).toBe('Alice');
@@ -264,18 +264,18 @@ describe('AdoClient', () => {
       });
       const items = await client.getWorkItemsByIds('MyProject', [42]);
       expect(items).toHaveLength(1);
-      expect(items[0]!.id).toBe(42);
-      const url = fetchMock.mock.calls[0]![0] as string;
+      expect(items[0]?.id).toBe(42);
+      const url = fetchMock.mock.calls[0]?.[0] as string;
       expect(url).toContain('workitems?ids=42');
     });
 
     it('handles multi-batch (>200 IDs)', async () => {
       const ids = Array.from({ length: 250 }, (_, i) => i + 1);
-      const makeDetail = (id: number) => ({
+      const makeDetail = (id: number): { id: number; fields: { 'System.Id': number; 'System.Title': string; 'System.WorkItemType': string; 'System.State': string } } => ({
         id,
         fields: {
           'System.Id': id,
-          'System.Title': `Item ${id}`,
+          'System.Title': `Item ${String(id)}`,
           'System.WorkItemType': 'Task',
           'System.State': 'Active',
         },
@@ -317,9 +317,9 @@ describe('AdoClient', () => {
       });
 
       expect(item.id).toBe(42);
-      const call = fetchMock.mock.calls[0]!;
-      const url = call[0] as string;
-      const init = call[1] as RequestInit;
+      const call = fetchMock.mock.calls[0] as [string, RequestInit];
+      const url = call[0];
+      const init = call[1];
       expect(url).toContain('/workitems/42');
       expect(init.method).toBe('PATCH');
       expect(init.headers).toMatchObject({ 'Content-Type': 'application/json-patch+json' });
@@ -343,15 +343,15 @@ describe('AdoClient', () => {
       });
 
       expect(item.id).toBe(42);
-      const call = fetchMock.mock.calls[0]!;
-      const url = call[0] as string;
-      const init = call[1] as RequestInit;
+      const call = fetchMock.mock.calls[0] as [string, RequestInit];
+      const url = call[0];
+      const init = call[1];
       expect(url).toContain('workitems/$Bug');
       expect(init.method).toBe('POST');
       expect(init.headers).toMatchObject({ 'Content-Type': 'application/json-patch+json' });
 
       const body = JSON.parse(init.body as string) as Array<{ op: string; path: string; value: unknown }>;
-      expect(body[0]!).toMatchObject({ op: 'add', path: '/fields/System.Title', value: 'Fix the bug' });
+      expect(body[0]).toMatchObject({ op: 'add', path: '/fields/System.Title', value: 'Fix the bug' });
     });
   });
 

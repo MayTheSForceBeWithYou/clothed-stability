@@ -70,9 +70,9 @@ function mapFields(item: AdoWorkItemDetail): WorkItem {
   const f = item.fields;
   const assignedTo = f['System.AssignedTo'];
   const assignedToStr =
-    typeof assignedTo === 'object' && assignedTo !== null
+    typeof assignedTo === 'object'
       ? assignedTo.displayName
-      : (assignedTo as string | undefined);
+      : assignedTo;
 
   const tagsRaw = f['System.Tags'];
   const tags = tagsRaw

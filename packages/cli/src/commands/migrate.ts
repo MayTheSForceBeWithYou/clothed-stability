@@ -47,10 +47,10 @@ export function registerMigrateCommand(program: Command): void {
       const skipped = results.filter((r) => r.status === 'skipped').length;
 
       console.log(`\nMigration summary:`);
-      console.log(`  Total:     ${results.length}`);
-      console.log(`  Succeeded: ${succeeded}`);
-      console.log(`  Skipped:   ${skipped}`);
-      console.log(`  Failed:    ${failed}`);
+      console.log(`  Total:     ${String(results.length)}`);
+      console.log(`  Succeeded: ${String(succeeded)}`);
+      console.log(`  Skipped:   ${String(skipped)}`);
+      console.log(`  Failed:    ${String(failed)}`);
 
       if (failed > 0) {
         process.exit(1);

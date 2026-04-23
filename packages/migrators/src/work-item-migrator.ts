@@ -71,7 +71,7 @@ export class WorkItemMigrator implements IMigrator {
 
     async function worker(): Promise<void> {
       while (index < items.length) {
-        const item = items[index++]!;
+        const item = items[index++] as T;
         await fn(item);
       }
     }
